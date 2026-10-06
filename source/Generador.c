@@ -126,28 +126,47 @@ int main(void){
 
    GPIO_PinInit(GPIO, 0, 4, &in_config); // User
    GPIO_PinInit(GPIO, 0, 12, &in_config); //ISP
-   GPIO_PinInit(GPIO, 0, 16, &in_config); //forma de onda
-   GPIO_PinInit(GPIO, 0, 18, &in_config); //+Freq
-   GPIO_PinInit(GPIO, 0, 19, &in_config); //-Freq
+
+   GPIO_PinInit(GPIO, 0, 18, &in_config); //clk
+   GPIO_PinInit(GPIO, 0, 19, &in_config); //sw
+
    GPIO_PinInit(GPIO, 1, 0, &out_config); //LED
    GPIO_PinInit(GPIO, 1, 1, &out_config); //LED
    GPIO_PinInit(GPIO, 1, 2, &out_config); //LED
 
    GPIO_PinWrite(GPIO, 1, 1, 0);
 
-   SYSCON_AttachSignal(SYSCON, kPINT_PinInt0, kSYSCON_GpioPort0Pin16ToPintsel); //Para interrupción por GPIO
-   SYSCON_AttachSignal(SYSCON, kPINT_PinInt1, kSYSCON_GpioPort0Pin18ToPintsel); //Para interrupción por GPIO
-   SYSCON_AttachSignal(SYSCON, kPINT_PinInt2, kSYSCON_GpioPort0Pin19ToPintsel); //Para interrupción por GP
+   SYSCON_AttachSignal(SYSCON,
+		   kPINT_PinInt0,
+		   kSYSCON_GpioPort0Pin17ToPintsel); //Para interrupción por GPIO
 
-   PINT_Init(PINT); //inicializacion de interrupcion por PINES
-   PINT_PinInterruptConfig(PINT, kPINT_PinInt0, kPINT_PinIntEnableFallEdge, pint0_callback); //por flanco descendente
-   PINT_PinInterruptConfig(PINT, kPINT_PinInt1, kPINT_PinIntEnableFallEdge, pint1_callback); //por flanco descendente
-   PINT_PinInterruptConfig(PINT, kPINT_PinInt2, kPINT_PinIntEnableFallEdge, pint2_callback); //por flanco descendente
-   PINT_EnableCallback(PINT); //activo el callback
+   SYSCON_AttachSignal(SYSCON,
+		   kPINT_PinInt1,
+		   kSYSCON_GpioPort0Pin18ToPintsel); //Para interrupción por GPIO
 
-   NVIC_EnableIRQ(PIN_INT0_IRQn); //activo la interrupción de PININT0
-   NVIC_EnableIRQ(PIN_INT1_IRQn); //activo la interrupción de PININT1
-   NVIC_EnableIRQ(PIN_INT2_IRQn); //activo la interrupción de PININT2
+
+ }
+
+ void Encoder_Init(void){
+
+	 CLOCK_EnableClock(kCLOCK_GpioInt);
+	 SYSCON->PINTSEL[0] = 18U; // canal PINT0 <- P0_18 (CLK)
+	 SYSCON->PINTSEL[1] = 19U; // canal PINT1 <- P0_19 (SW)
+
+	 PINT_Init(PINT);
+
+	 PINT_PinInterruptConfig(PINT,
+			 kPINT_PinInt0,
+			 kPINT_PinIntEnableFallEdge,
+			 PintCallback);
+
+	 PINT_PinInterruptConfig(PINT,
+			 kPINT_PinInt1,
+			 kPINT_PinIntEnableFallEdge,
+			 SwitchCallback);
+
+	 EnableIRQ(PIN_INT0_IRQn);
+	 EnableIRQ(PIN_INT1_IRQn);
 
  }
 
@@ -159,8 +178,12 @@ int main(void){
 
   }
 
+  void
 
-  void pint0_callback(pint_pin_int_t pintr, uint32_t pmatch_status){ //Cambia forma de onda
+
+
+
+ /* void pint0_callback(pint_pin_int_t pintr, uint32_t pmatch_status){ //Cambia forma de onda
 
    iForma++; //mueve de nid
    if(iForma>=cant_formas)iForma=0; //si llega al final
@@ -185,7 +208,7 @@ int main(void){
   else WF_frec=WF_frec+100;
   Actualizar_frec();
 
-  }
+  }*/
 
 
   void Actualizar_frec(){ //Actualiza la frecuencia
