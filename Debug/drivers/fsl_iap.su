@@ -1,0 +1,15 @@
+fsl_iap.c:52:24:translate_iap_status	24	static
+fsl_iap.c:65:20:iap_entry	16	static
+fsl_iap.c:81:10:IAP_ReadPartID	64	static
+fsl_iap.c:103:10:IAP_ReadBootCodeVersion	64	static
+fsl_iap.c:129:6:IAP_ReinvokeISP	72	static
+fsl_iap.c:153:10:IAP_ReadUniqueID	64	static
+fsl_iap.c:218:10:IAP_PrepareSectorForWrite	64	static
+fsl_iap.c:254:10:IAP_CopyRamToFlash	72	static
+fsl_iap.c:287:10:IAP_EraseSector	72	static
+fsl_iap.c:319:10:IAP_ErasePage	72	static
+fsl_iap.c:347:10:IAP_BlankCheckSector	64	static
+fsl_iap.c:377:10:IAP_Compare	72	static
+fsl_iap.c:403:10:IAP_ExtendedFlashSignatureRead	72	static
+fsl_iap.c:515:10:IAP_ReadFAIMPage	64	static
+fsl_iap.c:538:10:IAP_WriteFAIMPage	64	static
