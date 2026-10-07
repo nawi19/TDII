@@ -30,11 +30,13 @@ void DAC_config();
 void I2C_config();
 void LCD_config();
 void GPIO_config();
-void pint0_callback(pint_pin_int_t, uint32_t);
-void pint1_callback(pint_pin_int_t, uint32_t);
-void pint2_callback(pint_pin_int_t, uint32_t);
+void PintCallback(pint_pin_int_t pintr, uint32_t pmatch_status);
+void SwitchCallback(pint_pin_int_t pintr, uint32_t pmatch_status);
+void Frec_a_digitos(uint32_t f);
+uint32_t Digitos_a_frec();
 void LCD_Print_WF();
 void LCD_Print_frec();
+void Encoder_Init();
 void Actualizar_frec();
 
 
@@ -46,8 +48,15 @@ i2c_master_config_t cfg;
 
 #define SYSTEM_CORE_CLOCK CLOCK_GetFreq(kCLOCK_CoreSysClk) //clock del sistema
 #define DAC_frec 30000000
-#define DAC_contadorMAX 655300
-#define DAC_contadorMIN 1 //250 original. 199 lo minimo q llegue 184 ya se rompe
+#define DAC_contadorMAX 65535
+#define DAC_contadorMIN 195 //250 original. 199 lo minimo q llegue 184 ya se rompe
+#define NUM_DIGITOS 4
+#define FREC_MAX 9999
+
+volatile int8_t  digitos[NUM_DIGITOS] = {5, 0, 0, 0};
+volatile uint8_t digitoactual = 0;
+volatile uint32_t msTicks = 0, lastTickEncoder = 0, lastTickSwitch = 0;
+volatile bool frec_cambio = false;  // flag para avisar al main
 
 uint32_t DAC_contador=1, WF_frec=5000, iDAC=0;;
 volatile int iForma=0, iCalidad=0, nid_ext=1, cant_deseada;
@@ -65,30 +74,59 @@ int main(void){
  BOARD_BootClockFRO30M();
  SystemCoreClockUpdate();
  SysTick_Config(SystemCoreClock/1000);
+ NVIC_SetPriority(SysTick_IRQn, 1);
  I2C_config();
  LCD_config();
  GPIO_config();
  DAC_config();
- while (1);
+ Encoder_Init();
+
+ frec_cambio = true;
+
+ while (1){
+
+	 if (frec_cambio){
+	         frec_cambio = false;
+
+	         __disable_irq();
+	         WF_frec = Digitos_a_frec();
+	         __enable_irq();
+
+	         if (WF_frec > FREC_MAX) WF_frec = FREC_MAX;
+	         if (WF_frec < 1)        WF_frec = 1;
+
+	         Actualizar_frec();
+
+	         __disable_irq();
+	         Frec_a_digitos(WF_frec);
+	         __enable_irq();
+
+	    	 PRINTF("valor: %d%d%d%d dig:%d WF:%u\r\n",
+	    	 	                  digitos[0],digitos[1],digitos[2],digitos[3],
+	    	 	                  digitoactual, (unsigned)WF_frec);
+
+	     }
 
  }
 
+}
 
- void DAC_config(){
+void DAC_config(){
+    POWER_DisablePD(kPDRUNCFG_PD_DAC0);
+    DAC_GetDefaultConfig(&dacConfigStruct);
+    DAC_Init(DAC0, &dacConfigStruct);
+    DAC_EnableDoubleBuffering(DAC0, true);
 
-  POWER_DisablePD(kPDRUNCFG_PD_DAC0); //Activo el DAC
-  DAC_GetDefaultConfig(&dacConfigStruct); //Configuración del DAC
-  DAC_Init(DAC0, &dacConfigStruct);
-  DAC_SetCounterValue(DAC0, DAC_contador);
-  DAC_EnableDoubleBuffering(DAC0, true);
+    DAC_contador = DAC_frec/(WF_frec*lista[iForma].senal[iCalidad].cant);
+    DAC_SetCounterValue(DAC0, DAC_contador);
 
-  NVIC_SetPriority(DAC0_IRQn, 3); //Interrupción con la menor prioridad
-  NVIC_EnableIRQ(DAC0_IRQn); //Habilito la interrupción del DAC
+    NVIC_SetPriority(DAC0_IRQn, 3);
+    //EnableIRQ(DAC0_IRQn);
 
-  DAC_contador=DAC_frec/(WF_frec*lista[iForma].senal[iCalidad].cant); //Calculo el contador necesario
-  DAC_SetCounterValue(DAC0, DAC_contador); //Establezco contador del DAC
+    DAC_contador=DAC_frec/(WF_frec*lista[iForma].senal[iCalidad].cant); //Calculo el contador necesario
+    DAC_SetCounterValue(DAC0, DAC_contador); //Establezco contador del DAC
 
- }
+}
 
 
  void I2C_config(){ //Configuración I2C
@@ -111,10 +149,7 @@ int main(void){
  void LCD_config(){ //Configuración LCD
 
   LCD_Init(I2C1);
-  LCD_SetCursor(I2C1, 0, 0);
-  LCD_Print(I2C1, " Facundo Bernal ");
-  LCD_SetCursor(I2C1, 0, 1);
-  LCD_Print(I2C1, "TD2 UTN FRA 2025");
+  LCD_Print_WF();   // muestra el nombre de la forma de onda en la línea 1
 
  }
 
@@ -127,6 +162,7 @@ int main(void){
    GPIO_PinInit(GPIO, 0, 4, &in_config); // User
    GPIO_PinInit(GPIO, 0, 12, &in_config); //ISP
 
+   GPIO_PinInit(GPIO, 0, 16, &in_config); //dt
    GPIO_PinInit(GPIO, 0, 18, &in_config); //clk
    GPIO_PinInit(GPIO, 0, 19, &in_config); //sw
 
@@ -135,15 +171,6 @@ int main(void){
    GPIO_PinInit(GPIO, 1, 2, &out_config); //LED
 
    GPIO_PinWrite(GPIO, 1, 1, 0);
-
-   SYSCON_AttachSignal(SYSCON,
-		   kPINT_PinInt0,
-		   kSYSCON_GpioPort0Pin17ToPintsel); //Para interrupción por GPIO
-
-   SYSCON_AttachSignal(SYSCON,
-		   kPINT_PinInt1,
-		   kSYSCON_GpioPort0Pin18ToPintsel); //Para interrupción por GPIO
-
 
  }
 
@@ -165,9 +192,57 @@ int main(void){
 			 kPINT_PinIntEnableFallEdge,
 			 SwitchCallback);
 
+	 PINT_EnableCallback(PINT); //activo el callback
+
+	 NVIC_SetPriority(PIN_INT0_IRQn, 2);
+	 NVIC_SetPriority(PIN_INT1_IRQn, 2);
+
 	 EnableIRQ(PIN_INT0_IRQn);
 	 EnableIRQ(PIN_INT1_IRQn);
 
+
+ }
+
+ uint32_t Digitos_a_frec(void){
+     uint32_t f = 0;
+     for(int i=0; i<NUM_DIGITOS; i++)
+     f = f*10 + digitos[i];
+     return f;
+ }
+
+ void Frec_a_digitos(uint32_t f){
+     for(int i=NUM_DIGITOS-1; i>=0; i--){
+         digitos[i] = f % 10;
+         f /= 10;
+     }
+ }
+
+ void PintCallback(pint_pin_int_t pintr, uint32_t pmatch_status)
+ {
+     if ((msTicks - lastTickEncoder) < 5U) return;
+     lastTickEncoder = msTicks;
+
+     uint8_t clk = GPIO_PinRead(GPIO, 0, 18);
+     uint8_t dt  = GPIO_PinRead(GPIO, 0, 16);
+
+     if (clk != dt){
+         digitos[digitoactual]++;
+         if (digitos[digitoactual] > 9) digitos[digitoactual] = 0;
+     } else {
+         digitos[digitoactual]--;
+         if (digitos[digitoactual] < 0) digitos[digitoactual] = 9;
+     }
+     frec_cambio = true;
+ }
+
+ void SwitchCallback(pint_pin_int_t pintr, uint32_t pmatch_status)
+ {
+     if ((msTicks - lastTickSwitch) < 200U) return;
+     lastTickSwitch = msTicks;
+
+     digitoactual++;
+     if (digitoactual >= NUM_DIGITOS) digitoactual = 0;
+     frec_cambio = true;
  }
 
 
@@ -177,10 +252,6 @@ int main(void){
    if (iDAC>=cant_actual) iDAC=0;//si iDAC es igual al total de elementos de las muestras, vuelve al inicio
 
   }
-
-  void
-
-
 
 
  /* void pint0_callback(pint_pin_int_t pintr, uint32_t pmatch_status){ //Cambia forma de onda
@@ -224,16 +295,21 @@ int main(void){
 
   if(iCalidad>=lista[iForma].pasos) iCalidad=lista[iForma].pasos-1;
   DAC_contador=DAC_frec/(WF_frec*lista[iForma].senal[iCalidad].cant);//Calculo el contador necesario
+
   if(DAC_contador>DAC_contadorMAX){ //Si se pasa de los limites del contador...
+
   DAC_contador=DAC_contadorMAX;
   WF_frec=(DAC_frec/(DAC_contador*lista[iForma].senal[iCalidad].cant));
-  WF_frec=((WF_frec+50U)/100U)*100U;
+
   }
+
   if(DAC_contador<DAC_contadorMIN){
+
   DAC_contador=DAC_contadorMIN;
   WF_frec=(DAC_frec/(DAC_contador*lista[iForma].senal[iCalidad].cant));
-  WF_frec=((WF_frec+50U)/100U)*100U;
+
   }
+
   senal_actual=lista[iForma].senal[iCalidad].id; //Alojadas localmente
   cant_actual=lista[iForma].senal[iCalidad].cant;
   DAC_SetCounterValue(DAC0, DAC_contador); //Coloco el contador
@@ -245,8 +321,6 @@ int main(void){
   void LCD_Print_WF(){ //Actualiza la forma de onda en el LCD
 
   LCD_SetCursor(I2C1, 0, 0); //Imprimo nombre de la forma de onda
-  LCD_Print(I2C1, " ");
-  LCD_SetCursor(I2C1, 0, 0); //Imprimo nombre de la forma de onda
   LCD_Print(I2C1, lista[iForma].nombre);
 
   }
@@ -256,12 +330,15 @@ int main(void){
 
   LCD_SetCursor(I2C1, 0, 1); //Imprimo la frecuencia
   char aux[17]; //aux
-  if (WF_frec>9999) snprintf(aux, sizeof(aux), "f=%d.%d kHz ", (WF_frec/1000),((WF_frec %
-  1000)/100));
-  else{snprintf(aux, sizeof(aux), "f=%d Hz ", WF_frec);}
+  if (WF_frec>9999) snprintf(aux, sizeof(aux), "f=%d.%d kHz   ", (int)(WF_frec/1000), (int)((WF_frec%1000)/100));
+  else{snprintf(aux, sizeof(aux), "f=%d Hz       ", (int)WF_frec);}
   LCD_Print(I2C1,aux);
 
   }
 
 
-  void SysTick_Handler(){}
+  void SysTick_Handler(){
+
+	  msTicks++;
+
+  }
