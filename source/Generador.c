@@ -83,31 +83,7 @@ int main(void){
 
  frec_cambio = true;
 
- while (1){
-
-	 if (frec_cambio){
-	         frec_cambio = false;
-
-	         __disable_irq();
-	         WF_frec = Digitos_a_frec();
-	         __enable_irq();
-
-	         if (WF_frec > FREC_MAX) WF_frec = FREC_MAX;
-	         if (WF_frec < 1)        WF_frec = 1;
-
-	         Actualizar_frec();
-
-	         __disable_irq();
-	         Frec_a_digitos(WF_frec);
-	         __enable_irq();
-
-	    	 PRINTF("valor: %d%d%d%d dig:%d WF:%u\r\n",
-	    	 	                  digitos[0],digitos[1],digitos[2],digitos[3],
-	    	 	                  digitoactual, (unsigned)WF_frec);
-
-	     }
-
- }
+ while (1);
 
 }
 
@@ -121,7 +97,7 @@ void DAC_config(){
     DAC_SetCounterValue(DAC0, DAC_contador);
 
     NVIC_SetPriority(DAC0_IRQn, 3);
-    //EnableIRQ(DAC0_IRQn);
+    EnableIRQ(DAC0_IRQn);
 
     DAC_contador=DAC_frec/(WF_frec*lista[iForma].senal[iCalidad].cant); //Calculo el contador necesario
     DAC_SetCounterValue(DAC0, DAC_contador); //Establezco contador del DAC
@@ -233,6 +209,26 @@ void DAC_config(){
          if (digitos[digitoactual] < 0) digitos[digitoactual] = 9;
      }
      frec_cambio = true;
+
+     if (frec_cambio = true){
+
+    	 frec_cambio = false;
+    	 WF_frec = Digitos_a_frec();
+
+    	 if (WF_frec > FREC_MAX)
+    	 WF_frec = FREC_MAX;
+
+    	 if (WF_frec < 1)
+		 WF_frec = 1;
+
+		 Actualizar_frec();
+		 Frec_a_digitos(WF_frec);
+
+     }
+
+     PRINTF("valor: %d%d%d%d dig:%d WF:%u\r\n",
+     	    	 	                  digitos[0],digitos[1],digitos[2],digitos[3],
+     	    	 	                  digitoactual, (unsigned)WF_frec);
  }
 
  void SwitchCallback(pint_pin_int_t pintr, uint32_t pmatch_status)
