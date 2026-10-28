@@ -1,0 +1,9 @@
+lcd_i2c.c:12:17:LCD_I2C_WriteByte	24	static
+lcd_i2c.c:21:13:LCD_SendNibble	32	static
+lcd_i2c.c:30:6:LCD_SendByte	16	static
+lcd_i2c.c:36:6:LCD_Command	16	static
+lcd_i2c.c:42:6:LCD_Data	16	static
+lcd_i2c.c:48:6:LCD_Init	16	static
+lcd_i2c.c:72:6:LCD_SetCursor	16	static
+lcd_i2c.c:78:6:LCD_Print	16	static
+lcd_i2c.c:85:6:LCD_Clear	16	static
